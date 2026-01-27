@@ -1,0 +1,219 @@
+# ============================================================================
+# SENSITIVE FILES - PERSONAL DATA & CREDENTIALS (NEVER COMMIT)
+# ============================================================================
+
+# Environment variables and credentials
+.env
+.env.local
+.env.*.local
+.env.production.local
+.env.development.local
+
+# Strava tokens and configuration (contains personal auth data)
+config/strava_tokens.json
+config/*.json
+
+# ============================================================================
+# GENERATED DATA FILES - USER'S PERSONAL CYCLING DATA
+# ============================================================================
+
+# CSV outputs (contain personal activity details)
+data/*.csv
+
+# JSON raw data (contains personal activity records)
+data/*.json
+data/raw_activities.json
+data/cycling_*.csv
+
+# Tableau data sources
+data/*.hyper
+data/*.tds
+
+# Cache files
+data/.cache/
+cache/
+*.cache
+
+# ============================================================================
+# PYTHON ENVIRONMENT & DEVELOPMENT
+# ============================================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+.venv\
+
+# Poetry
+poetry.lock
+
+# ============================================================================
+# IDE & EDITOR ARTIFACTS
+# ============================================================================
+
+# Visual Studio Code
+.vscode/
+.vscode-settings/
+*.code-workspace
+
+# PyCharm / IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim / Neovim
+*.swp
+*.swo
+*~
+.vim/
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# Nano
+.nanorc
+
+# ============================================================================
+# TESTING & QUALITY
+# ============================================================================
+
+# pytest
+.pytest_cache/
+.pytest_cache/*
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+
+# tox
+.tox/
+.tox.ini
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# pytest-html
+report/
+
+# ============================================================================
+# OS-SPECIFIC FILES
+# ============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+# ============================================================================
+# TEMPORARY FILES & BUILD ARTIFACTS
+# ============================================================================
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Compiled files
+*.o
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Build directories
+build/
+dist/
+*.egg-info/
+
+# ============================================================================
+# DEPENDENCIES & LOCK FILES (OPTIONAL - uncomment if using poetry/pipenv)
+# ============================================================================
+
+# Pipenv
+Pipfile.lock
+
+# pdm
+.pdm.toml
+
+# ============================================================================
+# WHITELIST: Files that SHOULD be committed
+# ============================================================================
+
+# Keep these directories/files in git
+!data/.gitkeep
+!config/.gitkeep
+!tests/.gitkeep
+!.env.example
+!README.md
+!PROJECT_DOCUMENTATION.txt
+!requirements.txt
+!main.py
+!src/
+!tests/
+
+# Configuration & Tokens
+config/strava_tokens.json
+config/*.json
+
+# Cache
+.DS_Store
+Thumbs.db
+*.cache
+
+Thumbs.db
