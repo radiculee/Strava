@@ -399,3 +399,21 @@ All requirements met:
 Date: January 29, 2026  
 Version: 1.1  
 Status: ✅ **COMPLETE AND PRODUCTION READY**
+
+## v1.2 - Streamlit Dashboard
+
+- Added `dashboard/app.py` for a personalized Strava cycling dashboard.
+- Added auto-refresh (60s) for near-real-time CSV-driven updates.
+- Added KPI cards, monthly recap, calendar chart, top efforts, and route map.
+- Added `run_dashboard.bat` for dashboard startup.
+- Added `run_near_realtime.bat` for optional high-frequency ETL loop.
+- Added `DASHBOARD.md` with setup, scheduling, operations, and troubleshooting.
+- Updated dependencies with `streamlit` and `streamlit-autorefresh`.
+
+## v1.2.1 - Daily Update Mode
+
+- Enforced daily-only pipeline update behavior.
+- Removed `run_near_realtime.bat` high-frequency ETL loop.
+- Removed dashboard-side manual ETL refresh trigger.
+- Updated dashboard messaging and documentation to daily refresh model.
+- Removed unused `streamlit-autorefresh` dependency.

@@ -320,3 +320,52 @@ For issues:
 ## 📄 License
 
 This project respects Strava's terms of service. See [https://www.strava.com/legal](https://www.strava.com/legal)
+
+## Streamlit Dashboard
+
+This project now includes a personalized Streamlit dashboard:
+
+- App file: `dashboard/app.py`
+- Run script: `run_dashboard.bat`
+- Full docs: `DASHBOARD.md`
+
+Start dashboard:
+
+```bash
+streamlit run dashboard/app.py
+```
+
+Or:
+
+```bash
+run_dashboard.bat
+```
+
+Dashboard URL:
+
+- `http://localhost:8501`
+
+## Daily Update Policy (Current)
+
+Pipeline update mode is now daily-only (not real-time).
+
+- Use `run_pipeline.bat` in Windows Task Scheduler once per day at a fixed time.
+- `run_near_realtime.bat` has been removed.
+- Dashboard (`dashboard/app.py`) no longer triggers ETL refreshes on demand.
+- Dashboard shows the last ETL update timestamp from CSV file modification time.
+
+## Streamlit Cloud Deployment (Recommended)
+
+Use Streamlit Community Cloud for the easiest public showcase:
+
+1. Push this repo to GitHub.
+2. Create a new app in Streamlit Cloud.
+3. Set main file path to `dashboard/app.py`.
+4. Deploy and share the app URL.
+
+Recommended app settings:
+- `SHOWCASE_MODE=true`
+- `REQUIRE_GATEWAY_AUTH=false`
+
+Optional later:
+- Cloudflare/Supabase access controls can be added later, but are not required for Streamlit deployment.

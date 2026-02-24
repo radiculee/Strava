@@ -1,0 +1,23 @@
+[theme]
+primaryColor = "#fc4c02"
+backgroundColor = "#0f1117"
+secondaryBackgroundColor = "#1a1d25"
+textColor = "#f3f4f6"
+font = "sans serif"
+
+[client]
+showErrorDetails = true
+toolbarMode = "minimal"
+
+[server]
+headless = true
+port = 8501
+runOnSave = true
+enableXsrfProtection = true
+
+[logger]
+level = "info"
+
+# Enable wide mode for better dashboard layout
+[layout]
+sidebar.state = "expanded"

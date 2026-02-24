@@ -33,6 +33,14 @@ data/*.tds
 data/.cache/
 cache/
 *.cache
+logs/
+*.log
+
+# Deferred optional auth/logging stack (Supabase + Cloudflare)
+dashboard/supabase_schema.sql
+cloudflare/
+*cloudflare*.md
+*supabase*.md
 
 # ============================================================================
 # PYTHON ENVIRONMENT & DEVELOPMENT
