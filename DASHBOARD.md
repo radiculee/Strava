@@ -33,14 +33,22 @@ Use these settings in `.env` (local) or Streamlit secrets (cloud):
 ```toml
 SHOWCASE_MODE = "true"
 REQUIRE_GATEWAY_AUTH = "false"
+DASHBOARD_DATA_MODE = "demo"
 ```
 
 Notes:
 - `SHOWCASE_MODE=true` keeps data less sensitive by reducing time/metric precision.
 - `REQUIRE_GATEWAY_AUTH=false` keeps deployment simple (no Cloudflare dependency).
+- `DASHBOARD_DATA_MODE=demo` forces demo-only rides for public cloud deployment.
 - Supabase logging is optional and disabled unless credentials are provided.
 
-## 4. Data Update Model
+## 4. Data Modes
+
+- `demo`: always uses generated showcase rides (recommended for public cloud)
+- `personal`: only reads local `data/cycling_summary.csv`
+- `auto`: uses CSV if present, otherwise demo
+
+## 5. Data Update Model
 
 - Pipeline remains daily-only.
 - Run `run_pipeline.bat` once per day (Task Scheduler).

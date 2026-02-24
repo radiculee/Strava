@@ -11,6 +11,7 @@ import base64
 import calendar
 import hashlib
 import os
+import random
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -32,6 +33,8 @@ EMAIL_HEADER_CANDIDATES = (
     "x-auth-request-email",
     "x-forwarded-email",
 )
+VALID_DATA_MODES = {"demo", "personal", "auto"}
+DEFAULT_DATA_MODE = "demo"
 
 load_dotenv()
 
@@ -40,6 +43,13 @@ def _to_bool(value: str | None, default: bool) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _get_data_mode() -> str:
+    mode = (os.getenv("DASHBOARD_DATA_MODE") or DEFAULT_DATA_MODE).strip().lower()
+    if mode not in VALID_DATA_MODES:
+        return DEFAULT_DATA_MODE
+    return mode
 
 
 def _get_request_headers() -> dict[str, str]:
@@ -201,6 +211,7 @@ def _inject_theme(photo_uris: list[str]) -> None:
             background-repeat: no-repeat;
         }}
         section[data-testid="stSidebar"] {{ background: #11141b; border-right: 1px solid #242938; }}
+        section[data-testid="stSidebar"] > div:first-child {{ width: 260px !important; }}
         div[data-testid="stMetric"] {{ background: var(--card); border: 1px solid #2a2e39; border-radius: 14px; padding: 10px 14px; }}
         div[data-testid="stMetricValue"] {{ color: var(--accent); font-weight: 700; }}
         div[data-testid="stMetricLabel"] {{ color: #c8ced8; }}
@@ -255,12 +266,65 @@ def _inject_theme(photo_uris: list[str]) -> None:
     )
 
 
-@st.cache_data(ttl=45, show_spinner=False)
-def _load_data() -> pd.DataFrame:
-    if not SUMMARY_CSV.exists():
-        return pd.DataFrame()
+def _build_demo_summary(days: int = 180) -> pd.DataFrame:
+    """Generate deterministic showcase data when no CSV is available on cloud."""
+    end_date = datetime.now().date()
+    start_id = 990000000000
+    rows: list[dict[str, object]] = []
 
-    summary = pd.read_csv(SUMMARY_CSV)
+    for offset in range(days):
+        current_day = end_date - timedelta(days=offset)
+        if current_day.weekday() in (0, 2, 4, 5) or current_day.day % 5 == 0:
+            seed = current_day.toordinal()
+            rng = random.Random(seed)
+            distance_km = round(18 + rng.random() * 52, 2)
+            avg_kmh = round(21 + rng.random() * 11, 2)
+            moving_minutes = round((distance_km / max(avg_kmh, 0.1)) * 60, 1)
+            elevation_m = round(distance_km * (5 + rng.random() * 11), 1)
+            start_hour = 6 + (seed % 13)
+            start_minute = (seed % 4) * 15
+            start_dt = datetime.combine(current_day, datetime.min.time()).replace(
+                hour=start_hour,
+                minute=start_minute,
+                second=0,
+            )
+
+            rows.append(
+                {
+                    "Activity_ID": start_id + offset,
+                    "Activity_Name": "Showcase Ride",
+                    "Activity_Type": "Road Bike",
+                    "Activity_Class": "Leisure",
+                    "Start_Date_Local": start_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                    "Distance_KM": distance_km,
+                    "Elevation_M": elevation_m,
+                    "Moving_Time_Minutes": moving_minutes,
+                    "Average_Speed_KMH": avg_kmh,
+                    "Date": current_day.strftime("%Y-%m-%d"),
+                }
+            )
+
+    return pd.DataFrame(rows)
+
+
+@st.cache_data(ttl=45, show_spinner=False)
+def _load_data(data_mode: str) -> tuple[pd.DataFrame, str]:
+    if data_mode == "demo":
+        summary = _build_demo_summary()
+        source = "demo"
+    elif data_mode == "personal":
+        if not SUMMARY_CSV.exists():
+            return pd.DataFrame(), "missing"
+        summary = pd.read_csv(SUMMARY_CSV)
+        source = "csv"
+    else:
+        if SUMMARY_CSV.exists():
+            summary = pd.read_csv(SUMMARY_CSV)
+            source = "csv"
+        else:
+            summary = _build_demo_summary()
+            source = "demo"
+
     summary["Date"] = pd.to_datetime(summary["Date"], errors="coerce")
     if "Start_Date_Local" in summary.columns:
         summary["Start_DateTime"] = pd.to_datetime(summary["Start_Date_Local"], errors="coerce")
@@ -276,7 +340,7 @@ def _load_data() -> pd.DataFrame:
         summary["Average_Speed_KMH"], errors="coerce"
     ).fillna(0.0)
 
-    return summary.dropna(subset=["Date"])
+    return summary.dropna(subset=["Date"]), source
 
 
 def _compute_streak(dates: pd.Series) -> int:
@@ -359,8 +423,11 @@ def main() -> None:
     photo_uris = _load_personal_photo_uris(max_photos=3)
     _inject_theme(photo_uris)
 
-    summary = _load_data()
+    data_mode = _get_data_mode()
+    summary, data_source = _load_data(data_mode)
     summary = _apply_showcase_sanitization(summary, enabled=showcase_mode)
+    if data_source == "demo":
+        st.info("Demo mode is active: this public app uses generated rides and no personal Strava activity data.")
 
     header_left, header_right = st.columns([3.2, 1.6])
     with header_left:
@@ -374,13 +441,16 @@ def main() -> None:
 
     last_update = datetime.fromtimestamp(SUMMARY_CSV.stat().st_mtime) if SUMMARY_CSV.exists() else None
     freshness = "No data yet"
-    if last_update:
+    if data_source == "demo":
+        freshness = "Demo data (CSV missing on host)"
+    elif last_update:
         freshness = f"Last ETL update: {last_update.strftime('%Y-%m-%d %H:%M:%S')}"
     st.markdown(
         f'<span class="pill">Daily ETL Update Mode</span>'
         f'<span class="pill">{freshness}</span>'
         f'<span class="pill">Access: {("Gateway Auth" if user_email != "unknown@local" else "Open")}</span>'
-        f'<span class="pill">Mode: {"Showcase" if showcase_mode else "Private"}</span>',
+        f'<span class="pill">Mode: {"Showcase" if showcase_mode else "Private"}</span>'
+        f'<span class="pill">Data: {"Demo" if data_source == "demo" else "Personal"}</span>',
         unsafe_allow_html=True,
     )
     if photo_uris:
@@ -398,7 +468,10 @@ def main() -> None:
         st.info("Add your cycling photos to `dashboard/assets/` as `.jpg/.jpeg/.png/.webp` for personalized backgrounds.")
 
     if summary.empty:
-        st.warning("No summary data found. Run `python main.py --force` first.")
+        if data_mode == "personal":
+            st.warning("Personal mode is enabled but no local summary CSV was found. Run `python main.py --force` first.")
+        else:
+            st.warning("No summary data available for the selected mode.")
         st.stop()
 
     min_dt = summary["Start_DateTime"].min().to_pydatetime()
@@ -407,24 +480,66 @@ def main() -> None:
 
     with st.sidebar:
         st.header("Filters")
-        start_dt = _datetime_dropdown(
-            "Start Date/Time",
-            default_dt=default_start_dt,
-            min_dt=min_dt,
-            max_dt=max_dt,
-            key_prefix="start",
+        if st.button("Reset filters", use_container_width=True):
+            for key in (
+                "date_range_preset",
+                "custom_start_date",
+                "custom_end_date",
+                "activity_type_filter",
+                "monthly_select",
+            ):
+                st.session_state.pop(key, None)
+            st.rerun()
+
+        preset_options = ["Last 30 Days", "Last 90 Days", "Year to Date", "All Time", "Custom"]
+        selected_preset = st.selectbox(
+            "Date Range",
+            options=preset_options,
+            index=1,
+            key="date_range_preset",
         )
-        end_dt = _datetime_dropdown(
-            "End Date/Time",
-            default_dt=max_dt,
-            min_dt=min_dt,
-            max_dt=max_dt,
-            key_prefix="end",
-        )
-        st.caption(f"From: {start_dt.strftime('%B %d, %Y %H:%M')}")
-        st.caption(f"To: {end_dt.strftime('%B %d, %Y %H:%M')}")
+
+        if selected_preset == "Custom":
+            custom_start = st.date_input(
+                "Start Date",
+                value=default_start_dt.date(),
+                min_value=min_dt.date(),
+                max_value=max_dt.date(),
+                key="custom_start_date",
+            )
+            custom_end = st.date_input(
+                "End Date",
+                value=max_dt.date(),
+                min_value=min_dt.date(),
+                max_value=max_dt.date(),
+                key="custom_end_date",
+            )
+            start_dt = datetime.combine(custom_start, datetime.min.time())
+            end_dt = datetime.combine(custom_end, datetime.max.time())
+        elif selected_preset == "Last 30 Days":
+            start_dt = max(min_dt, max_dt - timedelta(days=30))
+            end_dt = max_dt
+        elif selected_preset == "Year to Date":
+            start_dt = max(min_dt, datetime(max_dt.year, 1, 1))
+            end_dt = max_dt
+        elif selected_preset == "All Time":
+            start_dt = min_dt
+            end_dt = max_dt
+        else:
+            start_dt = default_start_dt
+            end_dt = max_dt
+
         activity_types = sorted(summary["Activity_Type"].dropna().astype(str).unique().tolist())
-        selected_types = st.multiselect("Activity type", options=activity_types, default=activity_types)
+        selected_types = st.multiselect(
+            "Activity type",
+            options=activity_types,
+            default=activity_types,
+            key="activity_type_filter",
+        )
+
+        st.caption(f"From: {start_dt.strftime('%b %d, %Y')}")
+        st.caption(f"To: {end_dt.strftime('%b %d, %Y')}")
+
     if start_dt > end_dt:
         start_dt, end_dt = end_dt, start_dt
 
@@ -448,17 +563,18 @@ def main() -> None:
     month_display_map = {label: period for label, period in zip(month_display_labels, month_options)}
     latest_month_label = month_display_labels[-1] if month_display_labels else datetime.now().strftime("%B %Y")
 
-    st.markdown('<div class="section-title">All-Time Journey KPIs</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">All-Time Journey</div>', unsafe_allow_html=True)
     k1, k2, k3 = st.columns(3)
     k1.metric("Total Distance (km)", f"{all_time_distance:.1f}")
     k2.metric("Total Rides", f"{all_time_rides}")
     k3.metric("Total Time (hrs)", f"{all_time_hours:.1f}")
 
-    st.markdown('<div class="section-title">Monthly Journey KPIs</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Monthly Journey</div>', unsafe_allow_html=True)
     selected_month_label = st.selectbox(
         "Select month",
         options=month_display_labels if month_display_labels else [latest_month_label],
         index=(len(month_display_labels) - 1) if month_display_labels else 0,
+        key="monthly_select",
     )
     selected_month = month_display_map.get(selected_month_label, pd.Period(datetime.now(), freq="M"))
     monthly_base = summary[summary["Date"].dt.to_period("M") == selected_month]
@@ -471,7 +587,7 @@ def main() -> None:
     m2.metric("Monthly Rides", f"{monthly_rides}")
     m3.metric("Monthly Time (hrs)", f"{monthly_hours:.1f}")
 
-    st.markdown('<div class="section-title">Filtered View KPIs</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Filtered View</div>', unsafe_allow_html=True)
     total_distance = filtered["Distance_KM"].sum()
     total_elevation = filtered["Elevation_M"].sum()
     total_hours = filtered["Moving_Time_Minutes"].sum() / 60.0
@@ -487,7 +603,6 @@ def main() -> None:
 
     col_left, col_right = st.columns([1.8, 1.2])
     with col_left:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Distance Trend")
         daily = (
             filtered.assign(day=filtered["Date"].dt.date)
@@ -495,11 +610,30 @@ def main() -> None:
             .sum()
             .rename(columns={"day": "Date"})
         )
-        st.line_chart(daily.set_index("Date")["Distance_KM"], color="#fc4c02")
-        st.markdown("</div>", unsafe_allow_html=True)
+        daily["Date"] = pd.to_datetime(daily["Date"])
+        distance_chart = (
+            alt.Chart(daily)
+            .mark_line(color="#fc4c02", point=True)
+            .encode(
+                x=alt.X(
+                    "Date:T",
+                    axis=alt.Axis(title=None, format="%b %d", tickCount=8, labelAngle=0, labelColor="#d6dbe6"),
+                ),
+                y=alt.Y(
+                    "Distance_KM:Q",
+                    title="Distance (km)",
+                    axis=alt.Axis(labelColor="#d6dbe6", titleColor="#d6dbe6"),
+                ),
+                tooltip=[
+                    alt.Tooltip("Date:T", title="Date", format="%B %d, %Y"),
+                    alt.Tooltip("Distance_KM:Q", title="Distance (km)", format=".1f"),
+                ],
+            )
+            .properties(height=320)
+        )
+        st.altair_chart(distance_chart, use_container_width=True)
 
     with col_right:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("This Month Activity Calendar")
         now = datetime.now()
         month_df = summary[(summary["Date"].dt.year == now.year) & (summary["Date"].dt.month == now.month)]
@@ -507,11 +641,29 @@ def main() -> None:
         if cal.empty:
             st.caption("No activities this month yet.")
         else:
-            cal = cal.set_index("date").resample("D").sum().fillna(0)
-            st.bar_chart(cal["activities"], color="#fc4c02")
-        st.markdown("</div>", unsafe_allow_html=True)
+            cal = cal.set_index("date").resample("D").sum().fillna(0).reset_index()
+            monthly_calendar_chart = (
+                alt.Chart(cal)
+                .mark_bar(color="#fc4c02", cornerRadiusTopLeft=3, cornerRadiusTopRight=3)
+                .encode(
+                    x=alt.X(
+                        "date:T",
+                        axis=alt.Axis(title=None, format="%b %d", tickCount=8, labelAngle=0, labelColor="#d6dbe6"),
+                    ),
+                    y=alt.Y(
+                        "activities:Q",
+                        title="Rides",
+                        axis=alt.Axis(labelColor="#d6dbe6", titleColor="#d6dbe6"),
+                    ),
+                    tooltip=[
+                        alt.Tooltip("date:T", title="Date", format="%B %d, %Y"),
+                        alt.Tooltip("activities:Q", title="Rides"),
+                    ],
+                )
+                .properties(height=320)
+            )
+            st.altair_chart(monthly_calendar_chart, use_container_width=True)
 
-    st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader(f"Monthly Recap - {selected_month.strftime('%B %Y')}")
     monthly_days = int(monthly_base["Date"].dt.date.nunique()) if not monthly_base.empty else 0
     monthly_elev = float(monthly_base["Elevation_M"].sum()) if not monthly_base.empty else 0.0
@@ -604,9 +756,7 @@ def main() -> None:
                 .configure_view(stroke="#b8b8b8", strokeWidth=1.6, fill="#ffffff")
             )
             st.altair_chart(calendar_chart, use_container_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("Top Efforts")
     top_efforts = (
         filtered.assign(month=filtered["Date"].dt.to_period("M").dt.to_timestamp())
@@ -654,7 +804,6 @@ def main() -> None:
             use_container_width=True,
             hide_index=True,
         )
-    st.markdown("</div>", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()

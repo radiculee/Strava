@@ -366,6 +366,7 @@ Use Streamlit Community Cloud for the easiest public showcase:
 Recommended app settings:
 - `SHOWCASE_MODE=true`
 - `REQUIRE_GATEWAY_AUTH=false`
+- `DASHBOARD_DATA_MODE=demo` (demo-only public cloud)
 
 Optional later:
 - Cloudflare/Supabase access controls can be added later, but are not required for Streamlit deployment.
