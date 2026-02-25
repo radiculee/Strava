@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import calendar
+import html
 import hashlib
 import os
 import random
@@ -35,6 +36,8 @@ EMAIL_HEADER_CANDIDATES = (
 )
 VALID_DATA_MODES = {"demo", "personal", "auto"}
 DEFAULT_DATA_MODE = "demo"
+VALID_PHOTO_LAYOUTS = {"split", "overlay"}
+DEFAULT_PHOTO_LAYOUT = "split"
 
 load_dotenv()
 
@@ -50,6 +53,13 @@ def _get_data_mode() -> str:
     if mode not in VALID_DATA_MODES:
         return DEFAULT_DATA_MODE
     return mode
+
+
+def _get_photo_layout() -> str:
+    layout = (os.getenv("DASHBOARD_PHOTO_LAYOUT") or DEFAULT_PHOTO_LAYOUT).strip().lower()
+    if layout not in VALID_PHOTO_LAYOUTS:
+        return DEFAULT_PHOTO_LAYOUT
+    return layout
 
 
 def _get_request_headers() -> dict[str, str]:
@@ -178,8 +188,7 @@ def _load_personal_photo_uris(max_photos: int = 3) -> list[str]:
     return uris
 
 
-def _inject_theme(photo_uris: list[str]) -> None:
-    bg_photo = photo_uris[0] if photo_uris else ""
+def _inject_theme() -> None:
     st.markdown(
         f"""
         <style>
@@ -197,18 +206,6 @@ def _inject_theme(photo_uris: list[str]) -> None:
                 linear-gradient(145deg, rgba(10,12,16,.90), rgba(9,10,14,.92)),
                 radial-gradient(circle at 20% 0%, #1d2330 0%, #0f1117 55%);
             color: var(--text);
-        }}
-        .stApp::before {{
-            content: "";
-            position: fixed;
-            inset: 0;
-            pointer-events: none;
-            z-index: -1;
-            opacity: 0.22;
-            background-image: url("{bg_photo}");
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
         }}
         section[data-testid="stSidebar"] {{ background: #11141b; border-right: 1px solid #242938; }}
         section[data-testid="stSidebar"] > div:first-child {{ width: 260px !important; }}
@@ -228,27 +225,110 @@ def _inject_theme(photo_uris: list[str]) -> None:
         .profile-name {{ font-size: 1.02rem; font-weight: 700; color: #ffffff; line-height: 1.2; }}
         .profile-location {{ font-size: 0.84rem; color: #c9cfdb; line-height: 1.2; }}
         .section-title {{ font-size: 1.35rem; font-weight: 700; margin: 6px 0 8px 0; }}
-        .photo-strip {{
-            display: grid;
-            grid-template-columns: 1.35fr 1fr 1fr;
-            gap: 12px;
+        .scroll-photo-stack {{
             margin: 16px 0 12px 0;
         }}
-        .photo-tile {{
-            border-radius: 16px;
-            min-height: 170px;
-            border: 1px solid rgba(255,255,255,.12);
-            box-shadow: 0 14px 30px rgba(0,0,0,.32);
-            background-size: cover;
-            background-position: center;
+        .scroll-photo-section {{
+            min-height: 50vh;
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,.16);
+            box-shadow: 0 16px 34px rgba(0,0,0,.34);
+            margin-bottom: 14px;
             position: relative;
             overflow: hidden;
+            background-color: #0a0d13;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
         }}
-        .photo-tile::after {{
+        .scroll-photo-section::after {{
             content: "";
             position: absolute;
             inset: 0;
-            background: linear-gradient(to top, rgba(4,5,7,.44), rgba(4,5,7,.08));
+            background: linear-gradient(to top, rgba(4,5,7,.34), rgba(4,5,7,.06));
+            pointer-events: none;
+        }}
+        .scroll-photo-label {{
+            position: absolute;
+            left: 14px;
+            bottom: 12px;
+            z-index: 2;
+            color: #ffffff;
+            font-size: .84rem;
+            border: 1px solid rgba(255,255,255,.35);
+            background: rgba(7,9,13,.45);
+            border-radius: 999px;
+            padding: 3px 10px;
+        }}
+        .photo-kpi-section {{
+            position: relative;
+            min-height: 50vh;
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,.15);
+            box-shadow: 0 16px 34px rgba(0,0,0,.34);
+            margin: 16px 0 14px 0;
+            overflow: hidden;
+            background-color: #0a0d13;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }}
+        .photo-kpi-section::before {{
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(165deg, rgba(6,8,12,.68), rgba(6,8,12,.60) 40%, rgba(6,8,12,.76));
+            pointer-events: none;
+        }}
+        .photo-kpi-content {{
+            position: relative;
+            z-index: 2;
+            padding: 24px 20px;
+        }}
+        .photo-kpi-title {{
+            color: #ffffff;
+            font-size: 1.45rem;
+            font-weight: 700;
+            margin: 0 0 12px 0;
+        }}
+        .photo-kpi-grid-3, .photo-kpi-grid-5 {{
+            display: grid;
+            gap: 12px;
+        }}
+        .photo-kpi-grid-3 {{
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }}
+        .photo-kpi-grid-5 {{
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+        }}
+        .photo-kpi-card {{
+            background: rgba(15,17,23,.74);
+            border: 1px solid rgba(232,236,244,.28);
+            border-radius: 14px;
+            padding: 12px 14px;
+            backdrop-filter: blur(2px);
+        }}
+        .photo-kpi-card-label {{
+            color: #d8ddea;
+            font-size: .92rem;
+            margin-bottom: 4px;
+        }}
+        .photo-kpi-card-value {{
+            color: #fc4c02;
+            font-size: 2.15rem;
+            font-weight: 700;
+            line-height: 1.1;
+        }}
+        @media (max-width: 900px) {{
+            .scroll-photo-section {{ min-height: 36vh; }}
+            .photo-kpi-section {{ min-height: 36vh; }}
+            .photo-kpi-content {{ padding: 18px 14px; }}
+            .photo-kpi-grid-3 {{ grid-template-columns: repeat(1, minmax(0, 1fr)); }}
+            .photo-kpi-grid-5 {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+            .photo-kpi-card-value {{ font-size: 1.8rem; }}
+        }}
+        @media (min-width: 901px) and (max-width: 1280px) {{
+            .photo-kpi-grid-5 {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }}
         }}
         .pill {{
             display: inline-block;
@@ -262,6 +342,72 @@ def _inject_theme(photo_uris: list[str]) -> None:
         }}
         </style>
         """,
+        unsafe_allow_html=True,
+    )
+
+
+def _prepare_photo_sections(photo_uris: list[str], section_count: int = 3) -> list[str]:
+    if not photo_uris:
+        return []
+
+    ordered = photo_uris[:section_count]
+    while len(ordered) < section_count:
+        ordered.append(ordered[-1])
+    return ordered
+
+
+def _render_scroll_photo_section(photo_uri: str, photo_index: int, total_photos: int) -> None:
+    st.markdown(
+        (
+            "<div class='scroll-photo-stack'>"
+            "<section class='scroll-photo-section' style=\"background-image:url('"
+            + photo_uri
+            + "')\">"
+            "<div class='scroll-photo-label'>Photo "
+            + str(photo_index)
+            + " of "
+            + str(total_photos)
+            + "</div></section></div>"
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def _render_photo_kpi_section(
+    photo_uri: str,
+    title: str,
+    cards: list[tuple[str, str]],
+    grid_columns: int,
+) -> None:
+    grid_class = "photo-kpi-grid-5" if grid_columns == 5 else "photo-kpi-grid-3"
+    cards_html = []
+    for label, value in cards:
+        cards_html.append(
+            "<div class='photo-kpi-card'>"
+            "<div class='photo-kpi-card-label'>"
+            + html.escape(label)
+            + "</div>"
+            "<div class='photo-kpi-card-value'>"
+            + html.escape(value)
+            + "</div>"
+            "</div>"
+        )
+
+    st.markdown(
+        (
+            "<section class='photo-kpi-section' style=\"background-image:url('"
+            + photo_uri
+            + "')\">"
+            "<div class='photo-kpi-content'>"
+            "<div class='photo-kpi-title'>"
+            + html.escape(title)
+            + "</div>"
+            "<div class='"
+            + grid_class
+            + "'>"
+            + "".join(cards_html)
+            + "</div></div></section>"
+        ),
         unsafe_allow_html=True,
     )
 
@@ -414,14 +560,18 @@ def _datetime_dropdown(
     return selected
 
 
-def main() -> None:
+def main(photo_layout: str | None = None) -> None:
     st.set_page_config(page_title="Strava Cycling Dashboard", layout="wide")
     showcase_mode = _to_bool(os.getenv("SHOWCASE_MODE"), default=True)
+    active_photo_layout = (photo_layout or _get_photo_layout()).strip().lower()
+    if active_photo_layout not in VALID_PHOTO_LAYOUTS:
+        active_photo_layout = DEFAULT_PHOTO_LAYOUT
     request_headers, user_email = _ensure_authenticated_access()
     _log_access_to_supabase(user_email, request_headers)
 
     photo_uris = _load_personal_photo_uris(max_photos=3)
-    _inject_theme(photo_uris)
+    photo_sections = _prepare_photo_sections(photo_uris, section_count=3)
+    _inject_theme()
 
     data_mode = _get_data_mode()
     summary, data_source = _load_data(data_mode)
@@ -450,22 +600,15 @@ def main() -> None:
         f'<span class="pill">{freshness}</span>'
         f'<span class="pill">Access: {("Gateway Auth" if user_email != "unknown@local" else "Open")}</span>'
         f'<span class="pill">Mode: {"Showcase" if showcase_mode else "Private"}</span>'
-        f'<span class="pill">Data: {"Demo" if data_source == "demo" else "Personal"}</span>',
+        f'<span class="pill">Data: {"Demo" if data_source == "demo" else "Personal"}</span>'
+        f'<span class="pill">Layout: {"Photo Overlay" if active_photo_layout == "overlay" else "Split Scroll"}</span>',
         unsafe_allow_html=True,
     )
-    if photo_uris:
-        # Repeat last image if fewer than 3 are available so layout stays balanced.
-        tiles = photo_uris + ([photo_uris[-1]] * (3 - len(photo_uris)))
-        st.markdown(
-            "<div class='photo-strip'>"
-            f"<div class='photo-tile' style=\"background-image:url('{tiles[0]}')\"></div>"
-            f"<div class='photo-tile' style=\"background-image:url('{tiles[1]}')\"></div>"
-            f"<div class='photo-tile' style=\"background-image:url('{tiles[2]}')\"></div>"
-            "</div>",
-            unsafe_allow_html=True,
+    if active_photo_layout == "overlay" and not photo_sections:
+        st.info(
+            "Overlay layout is enabled but no photos were found in `dashboard/assets/`. "
+            "Add at least one image to render KPI sections over photos."
         )
-    else:
-        st.info("Add your cycling photos to `dashboard/assets/` as `.jpg/.jpeg/.png/.webp` for personalized backgrounds.")
 
     if summary.empty:
         if data_mode == "personal":
@@ -563,13 +706,8 @@ def main() -> None:
     month_display_map = {label: period for label, period in zip(month_display_labels, month_options)}
     latest_month_label = month_display_labels[-1] if month_display_labels else datetime.now().strftime("%B %Y")
 
-    st.markdown('<div class="section-title">All-Time Journey</div>', unsafe_allow_html=True)
-    k1, k2, k3 = st.columns(3)
-    k1.metric("Total Distance (km)", f"{all_time_distance:.1f}")
-    k2.metric("Total Rides", f"{all_time_rides}")
-    k3.metric("Total Time (hrs)", f"{all_time_hours:.1f}")
-
-    st.markdown('<div class="section-title">Monthly Journey</div>', unsafe_allow_html=True)
+    if active_photo_layout == "overlay" and photo_sections:
+        st.markdown('<div class="section-title">Monthly Snapshot</div>', unsafe_allow_html=True)
     selected_month_label = st.selectbox(
         "Select month",
         options=month_display_labels if month_display_labels else [latest_month_label],
@@ -582,24 +720,65 @@ def main() -> None:
     monthly_rides = int(monthly_base["Activity_ID"].count())
     monthly_hours = monthly_base["Moving_Time_Minutes"].sum() / 60.0
 
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Monthly Distance (km)", f"{monthly_distance:.1f}")
-    m2.metric("Monthly Rides", f"{monthly_rides}")
-    m3.metric("Monthly Time (hrs)", f"{monthly_hours:.1f}")
-
-    st.markdown('<div class="section-title">Filtered View</div>', unsafe_allow_html=True)
     total_distance = filtered["Distance_KM"].sum()
     total_elevation = filtered["Elevation_M"].sum()
     total_hours = filtered["Moving_Time_Minutes"].sum() / 60.0
     ride_days = filtered["Date"].dt.date.nunique()
     streak_days = _compute_streak(summary["Date"])
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Distance (km)", f"{total_distance:.1f}")
-    c2.metric("Elevation (m)", f"{total_elevation:.0f}")
-    c3.metric("Ride Time (hrs)", f"{total_hours:.1f}")
-    c4.metric("Ride Days", f"{ride_days}")
-    c5.metric("Current Streak (days)", f"{streak_days}")
+    if active_photo_layout == "overlay" and photo_sections:
+        _render_photo_kpi_section(
+            photo_sections[0],
+            "All-Time Journey",
+            cards=[
+                ("Total Distance (km)", f"{all_time_distance:.1f}"),
+                ("Total Rides", f"{all_time_rides}"),
+                ("Total Time (hrs)", f"{all_time_hours:.1f}"),
+            ],
+            grid_columns=3,
+        )
+        _render_photo_kpi_section(
+            photo_sections[1],
+            f"Monthly Journey - {selected_month.strftime('%B %Y')}",
+            cards=[
+                ("Monthly Distance (km)", f"{monthly_distance:.1f}"),
+                ("Monthly Rides", f"{monthly_rides}"),
+                ("Monthly Time (hrs)", f"{monthly_hours:.1f}"),
+            ],
+            grid_columns=3,
+        )
+        _render_photo_kpi_section(
+            photo_sections[2],
+            "Filtered View",
+            cards=[
+                ("Distance (km)", f"{total_distance:.1f}"),
+                ("Elevation (m)", f"{total_elevation:.0f}"),
+                ("Ride Time (hrs)", f"{total_hours:.1f}"),
+                ("Ride Days", f"{ride_days}"),
+                ("Current Streak (days)", f"{streak_days}"),
+            ],
+            grid_columns=5,
+        )
+    else:
+        st.markdown('<div class="section-title">All-Time Journey</div>', unsafe_allow_html=True)
+        k1, k2, k3 = st.columns(3)
+        k1.metric("Total Distance (km)", f"{all_time_distance:.1f}")
+        k2.metric("Total Rides", f"{all_time_rides}")
+        k3.metric("Total Time (hrs)", f"{all_time_hours:.1f}")
+
+        st.markdown('<div class="section-title">Monthly Journey</div>', unsafe_allow_html=True)
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Monthly Distance (km)", f"{monthly_distance:.1f}")
+        m2.metric("Monthly Rides", f"{monthly_rides}")
+        m3.metric("Monthly Time (hrs)", f"{monthly_hours:.1f}")
+
+        st.markdown('<div class="section-title">Filtered View</div>', unsafe_allow_html=True)
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("Distance (km)", f"{total_distance:.1f}")
+        c2.metric("Elevation (m)", f"{total_elevation:.0f}")
+        c3.metric("Ride Time (hrs)", f"{total_hours:.1f}")
+        c4.metric("Ride Days", f"{ride_days}")
+        c5.metric("Current Streak (days)", f"{streak_days}")
 
     col_left, col_right = st.columns([1.8, 1.2])
     with col_left:
@@ -804,6 +983,15 @@ def main() -> None:
             use_container_width=True,
             hide_index=True,
         )
+
+    if active_photo_layout == "split":
+        if photo_sections:
+            st.markdown('<div class="section-title">Ride Photos</div>', unsafe_allow_html=True)
+            total_photos = len(photo_sections)
+            for idx, photo_uri in enumerate(photo_sections, start=1):
+                _render_scroll_photo_section(photo_uri, photo_index=idx, total_photos=total_photos)
+        else:
+            st.info("Add your cycling photos to `dashboard/assets/` as `.jpg/.jpeg/.png/.webp` for personalized backgrounds.")
 
 if __name__ == "__main__":
     main()
